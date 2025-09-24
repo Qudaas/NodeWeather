@@ -1,0 +1,170 @@
+*{
+    box-sizing: border-box;
+    
+}
+body{
+    background-color: #0000FF;
+    background-size: 100%;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
+}
+
+h1{
+    color: #191970;
+    display: flex;
+    justify-content: center;
+    position: relative;
+    top: -20px;
+    font-size: 85px;
+    font-family: Impact, fantasy;
+}
+#one{
+    position: relative;
+    top: -50px;
+    left: 10px;
+}
+select {
+    appearance: none;
+    background-color: transparent;
+    border: none;
+    padding: 0px 2px 2px 2px;
+    margin-left: 10px;
+    font-family: inherit;
+    font-size: inherit;
+    cursor: pointer;
+    line-height: inherit;
+    width: 165px;
+    height: 40px;
+    border: 1px solid #999;
+    font-size: 23px;
+    color: #1c87c9;
+    background-color: #eee;
+    border-radius: 5px;
+    box-shadow: 0px 4px 5px #0000FF;
+    text-align: center;
+}
+
+option{
+    font-size: 20px;
+    cursor: pointer;
+}
+.main{
+    background-color: white;
+    position: relative;
+    top: 25px;
+    font-size: 40px;
+    margin: auto;
+    width: 700px;
+    height: 600px;
+    display: block;
+    border: 1px solid black;
+    border-radius: 10px;
+}
+.right{
+    position: absolute;
+    left: 470px;
+    top: 320px;
+    width: 200px;
+    font-size: 20px;
+    text-align: left;
+}
+#city{ 
+    top: -25px;
+    position: relative;
+    font-size: 30px;
+    text-align: center;
+    width: 350px;
+    height: 200px;
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: scroll;
+    overflow-x: hidden;
+    text-overflow: ellipsis;
+    border-top: 1px solid black;
+    border-bottom: 1px solid black;
+    cursor: pointer;
+
+}
+#city::-webkit-scrollbar-track{
+    border: 1px solid silver;
+    background-color: silver;
+}
+
+#city::-webkit-scrollbar {
+    width: 15px;
+    background-color: transparent;
+}
+#city::-webkit-scrollbar-thumb{
+    border: 1px solid silver;
+    border-radius: 5px;
+    background-color: #696969;
+}
+    .search-box {
+        position: absolute;
+        display: flex;
+        margin-top: -79px;
+        margin-left: 130px;
+        transform: translate(-50%,);
+        background: #666666;
+        border-radius: 40px;
+        }
+        .search-box:hover > .search-txt {
+        width: 185px;
+        padding: 0 6px;
+        }
+        .search-box:hover > .search-btn {
+        background: white;
+        color: black;
+        }
+        .search-btn {
+        color: #eeeeee;
+        float: right;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #191970;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        transition: 0.4s;
+        color: white;
+        cursor: pointer;
+        text-decoration:none;
+        }
+        .search-btn > i {
+        font-size: 24px;
+        }
+        .search-txt {
+        border: none;
+        background: none;
+        outline: none;
+        float: left;
+        padding: 0;
+        color: white;
+        font-size: 16px;
+        transition: 0.4s;
+        line-height: 40px;
+        width: 0px;
+        font-weight: bold;
+        }
+
+          .header__title {
+            margin-top: 40px;
+            background: url(https://st2.depositphotos.com/1434993/5575/i/600/depositphotos_55757535-stock-photo-sun-light-day-and-moon.jpg);
+            font-size: 100px;
+            color: transparent;
+            -webkit-background-clip: text;
+            animation: animate 10s infinite ease;
+            animation-direction: alternate;
+            text-align: center;
+            -webkit-text-stroke: 0.07rem rgba(27, 33, 216, 0.826);
+          }
+          @keyframes animate {
+            from {
+              background-position: 0% 20%;
+            }
+            to {
+              background-position: 100% 20%;
+            }
+          }

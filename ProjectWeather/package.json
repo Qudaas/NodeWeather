@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "jquery": "^3.3.1",
+    "serve": "^14.1.2"
+  }
+}

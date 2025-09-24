@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="style.css">
+    <script defer src="app.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+</head>
+<body>  
+    <div class="main">
+        <header class="header">
+            <h1 class="header__title">Weath.OK<h1>
+        </header>        
+            <div id="one">
+               <label for="">Країна: </label>
+            <select>     
+                <option disabled selected>Виберіть країнy</option>
+                <option value="UA">Україна</option>
+                <option value="JP">Японія</option>
+                <option value="TR">Турція</option>
+                <option value="PL">Польша</option>
+                <option value="US">Америка</option>
+            </select> 
+            <p><label for="">Місто: </label>
+             <div class="container">
+                <div class="search-box">
+                    <input type="search" name="" class="search-txt"/>
+                    <a class="search-btn" href="#">
+                    <i class="fa fa-search" aria-hidden="true"></i>
+                    </a>
+                  </div>
+             </div>
+        <div id="city">
+        </div> 
+        </p>
+        </div>
+        <div class="right">
+            <div id="weather"></div>
+        </div>        
+        <script src="jquery-3.6.1.min.js"></script>
+        <script>
+            const inp = $('.search-txt');
+            $('select').on('change', function(){
+                    inp.focus();
+                    inp.on('input', function() {
+                        $('#city p').each(function() {
+                            ($(this).text().toLowerCase().indexOf(inp.val().toLowerCase())>-1)?$(this).show():$(this).hide();
+                        });
+                    });
+            });
+            </script>
+</body>
+</html>
