@@ -6,6 +6,7 @@ const VC_KEY = 'YSJBGSYSQPENB9XUVRGNG37YZ';
 
 $(document).ready(function () {
   $.getJSON('current.city.list.json', function (cities) {
+    let selectedCity = null; 
     $('select').on('change', function () {
       let out = '';
       for (const city of cities) {
@@ -19,17 +20,15 @@ $(document).ready(function () {
       $('#city p').on('click', function () {
         const lat = $(this).data('lat');
         const lon = $(this).data('lon');
+        selectedCity = {
+            lat: $(this).data('lat'),
+            lon: $(this).data('lon'),
+            name: $(this).text()
+        };
+        $('#date-range').show(); 
 
-        const url = `https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/${lat},${lon}?unitGroup=metric&include=days&key=${VC_KEY}&contentType=json`;
+            loadWeather(selectedCity.lat, selectedCity.lon, selectedCity.name); 
 
-        fetch(url)
-          .then((r) => r.json())
-          .then((data) => {
-            const days = (data.days || []).slice(0, 7);
-            let out = '';
-            out += '<hr>';
-            out += `Місто: <b>${data.address}</b><br>`;
-            out += `<div style="margin-top:6px"></div>`;
 
             days.forEach((d) => {
               out += `
