@@ -10,6 +10,7 @@ $(document) .ready(function() {
                 out +=`<p value="${data[key].id}">${data[key].name}</p>`;
             }
         }
+        
         $('#city').html(out);
         $('#city p').on('click', function(){
             $.get(
