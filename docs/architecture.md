@@ -2,12 +2,32 @@
 
 ## 1. Загальний огляд
 
-NodeWeather — це клієнт–серверний застосунок для перегляду погоди, збереження улюблених міст та історії запитів. Складається з:
+NodeWeather — це клієнт–серверний застосунок для перегляду погоди, збереження улюблених міст та історії запитів.
 
-- **Frontend (HTML/CSS/JS)** — рендер UI, виклики API, обробка вибору країни/міста, відображення історії та улюблених.
-- **Backend (Node.js + Express)** — REST API для роботи з історією, улюбленими містами, аналітикою та проксі-доступом до погодного сервісу.
-- **База даних SQLite** — зберігання таблиць `favorites` та `history`.
-- **Зовнішній погодний API (VisualCrossing)** — джерело фактичних даних про погоду.
+До складу системи входять:
+
+- **Frontend (HTML/CSS/JS + jQuery)**  
+  - відображення інтерфейсу;
+  - вибір країни/міста з великого списку (`current.city.list.json`);
+  - виклики REST API бекенда для роботи з обраними містами та історією;
+  - виклики зовнішнього погодного API для отримання фактичної погоди;
+  - відображення аналітики (топ міст, кількість запитів).
+
+- **Backend (Node.js + Express)**  
+  - REST API `/api/favorites`, `/api/history`, `/api/stats`;
+  - валідація даних;
+  - бізнес-логіка роботи з історією переглядів та улюбленими містами;
+  - агрегація статистики (топ міст, загальні лічильники, запити за день);
+  - доступ до БД SQLite через шар DAL.
+
+- **База даних SQLite (`weather.db`)**  
+  - таблиця `favorites`;
+  - таблиця `history`;
+  - дані використовуються для побудови аналітики.
+
+- **Зовнішній погодний API (VisualCrossing)**  
+  - джерело фактичних даних про погоду;
+  - викликається безпосередньо з фронтенда (через `weatherService.js`).
 
 ---
 
@@ -15,237 +35,286 @@ NodeWeather — це клієнт–серверний застосунок дл
 
 ```mermaid
 flowchart LR
-    subgraph Client
-        UI[Browser UI<br/>index.html + app.js]
+  %% ===== FRONTEND =====
+  subgraph Browser["Browser / Frontend"]
+    UI["UI (index.html, style.css, app.js)"]
+    SA["Storage API client
+(services/storageApi.js)"]
+    WS["Weather service client
+(services/weatherService.js)"]
+  end
+
+  %% ===== BACKEND =====
+  subgraph Backend["NodeWeather Backend (Node.js + Express)"]
+    APP["Express app (src/app.js)"]
+
+    subgraph Routes["Routers (src/routes)"]
+      RF["Favorites router
+(favorites.route.js)"]
+      RH["History router
+(history.route.js)"]
+      RS["Stats router
+(stats.route.js)"]
     end
 
-    subgraph Server[Node.js + Express]
-        ROUTES[Express Routes]
-        SERVICES[Service Layer]
-        DAL[Data Access Layer (DAL)]
+    subgraph Services["Services (src/services)"]
+      SF["FavoritesService
+(favorites.service.js)"]
+      SH["HistoryService
+(history.service.js)"]
+      SS["StatsService
+(stats.service.js)"]
     end
 
-    subgraph DB[SQLite]
-        FAVTBL[(favorites)]
-        HISTBL[(history)]
+    subgraph DAL["Data Access Layer (src/dal)"]
+      DF["favorites.dal.js"]
+      DH["history.dal.js"]
+      DST["stats.dal.js"]
     end
 
-    API[VisualCrossing Weather API]
+    DB[("SQLite database
+weather.db")]
+  end
 
-    UI -->|HTTP /api/*| ROUTES
-    ROUTES --> SERVICES
-    SERVICES --> DAL
-    DAL --> FAVTBL
-    DAL --> HISTBL
+  VC["VisualCrossing
+Weather API"]
 
-    SERVICES -->|HTTP| API
+  %% FRONTEND FLOWS
+  UI --> SA
+  UI --> WS
+
+  %% BACKEND FLOWS
+  SA --> APP
+  APP --> RF
+  APP --> RH
+  APP --> RS
+
+  RF --> SF
+  RH --> SH
+  RS --> SS
+
+  SF --> DF
+  SH --> DH
+  SS --> DST
+
+  DF --> DB
+  DH --> DB
+  DST --> DB
+
+  %% EXTERNAL API
+  WS --> VC
 ```
+
+Діаграма показує:
+
+- браузер з трьома основними компонентами: UI, клієнт REST API бекенда, клієнт погодного API;
+- бекенд, розбитий на **routers → services → DAL → SQLite**;
+- окремий зовнішній сервіс погодних даних (VisualCrossing).
 
 ---
 
 ## 3. Архітектура backend
 
-Бекенд реалізовано у вигляді **трирівневої архітектури** з чітким поділом відповідальностей.
+Backend реалізовано на основі **Express** і складається з декількох шарів.
 
-### 3.1 Роутери (HTTP-рівень)
+### 3.1. Вхідна точка
 
-Роутери відповідають за:
+- `src/index.js` — стартовий файл, який:
+  - створює застосунок через `createApp()` з `src/app.js`;
+  - вішає застосунок на порт (за замовчуванням `4000`);
+  - логувує успішний старт сервера.
 
-- прийом HTTP-запитів;
-- роботу з `req` / `res`;
-- делегування бізнес-логіки сервісному шару.
+- `src/app.js`:
+  - реєструє middleware `cors()` та `express.json()`;
+  - надає health-check `GET /api/health` (перевірка живучості сервера);
+  - підключає роутери:
+    - `/api/favorites` → `favoritesRouter`;
+    - `/api/history` → `historyRouter`;
+    - `/api/stats` → `statsRouter`.
 
-Основні роутери:
+### 3.2. Роутери (HTTP-рівень)
 
-- `backend/src/routes/favorites.route.js` — операції з улюбленими містами:
-  - `GET /api/favorites`
-  - `POST /api/favorites`
-  - `DELETE /api/favorites/:name`
-  - `DELETE /api/favorites`
-- `backend/src/routes/history.route.js` — робота з історією переглядів:
-  - `GET /api/history`
-  - `POST /api/history`
-  - `DELETE /api/history`
-  - `DELETE /api/history/cleanup?days=30` — очищення старих записів (не лише CRUD, а бізнес-операція).
-- `backend/src/routes/stats.route.js` — аналітичні ендпоінти:
-  - `GET /api/stats/top-cities`
-  - `GET /api/stats/overview`
-  - `GET /api/stats/today`
-- (за потреби) `backend/src/routes/weather.route.js` — проксі до зовнішнього погодного API.
+- `favorites.route.js`:
+  - `GET /api/favorites` — отримати список улюблених міст;
+  - `POST /api/favorites` — додати місто в улюблені;
+  - `DELETE /api/favorites/:name` — видалити конкретне місто;
+  - `DELETE /api/favorites` — очистити всі улюблені (повертає `{ success: true, deleted }`).
 
-Підключення роутерів виконується у модулі застосунку:
+- `history.route.js`:
+  - `GET /api/history?limit=10` — остання історія переглядів;
+  - `POST /api/history` — додати запис в історію;
+  - `DELETE /api/history` — очистити історію повністю;
+  - `DELETE /api/history/cleanup?days=30` — видалити записи старше N днів  
+    (повертає `{ success: true, changed, beforeDate }`).
 
-```javascript
-// backend/src/app.js
-app.use("/api/favorites", favoritesRouter);
-app.use("/api/history", historyRouter);
-app.use("/api/stats", statsRouter);
-// app.use("/api/weather", weatherRouter); // якщо виділяється окремий роутер
-```
+- `stats.route.js`:
+  - `GET /api/stats/top-cities?limit=5` — топ міст за кількістю звернень;
+  - `GET /api/stats/overview` — агреговані лічильники (`totalHistory`, `totalFavorites`);
+  - `GET /api/stats/today?date=YYYY-MM-DD` — кількість запитів за конкретну дату.
 
-### 3.2 Сервісний шар (business logic)
+Кожен роутер відповідає лише за HTTP-рівень: розбір параметрів, статус-коди, JSON-відповідь.
 
-Сервісний шар інкапсулює:
+### 3.3. Сервісний шар (бізнес-логіка)
 
-- валідацію вхідних даних;
-- бізнес-правила (обмеження за кількістю записів, обробку параметрів, логіку очищення);
-- координацію кількох викликів DAL.
+- `favorites.service.js`:
+  - валідує назву міста, координати;
+  - запобігає додаванню дублікатів;
+  - повертає структуровані результати `{ changed }` для операцій видалення.
 
-Основні сервіси:
+- `history.service.js`:
+  - обмежує кількість записів (`limit`, типово `10`);
+  - перевіряє обов’язкові поля (дата, місто);
+  - забезпечує обрізання/очищення історії;
+  - виконує очистку старих записів через `deleteHistoryOlderThan()`.
 
-- `backend/src/services/favorites.service.js`
-  - додавання, видалення, очищення улюблених міст;
-  - перевірка вхідних даних (`name`, `lat`, `lon`).
-- `backend/src/services/history.service.js`
-  - створення запису історії запиту;
-  - підтримка фіксованої довжини історії;
-  - очищення історії старше N днів.
-- `backend/src/services/stats.service.js`
-  - розрахунок топ-міст за кількістю переглядів;
-  - підрахунок загальної кількості записів;
-  - кількість запитів за конкретну дату.
+- `stats.service.js`:
+  - нормалізує параметр `limit` для топ-міст (1..50, за замовчуванням 5);
+  - рахує загальні лічильники (`totalHistory`, `totalFavorites`);
+  - визначає поточну дату для `/today`, якщо параметр не передано;
+  - повертає компактні DTO:
+    - масив `{ city, count }` для топ-міст;
+    - `{ totalHistory, totalFavorites }` для загального огляду;
+    - `{ date, requests }` для статистики за день.
 
-У сервісах не використовується `res`/`req` та немає SQL — лише бізнес-логіка.
+### 3.4. DAL (Data Access Layer) та SQLite
 
-### 3.3 Шар доступу до даних (DAL)
+Файл `src/db/db.js`:
 
-DAL — єдиний рівень, де безпосередньо виконуються SQL-запити до SQLite.
+- налаштовує з’єднання з SQLite (`weather.db`);
+- інкапсулює низькорівневі операції:
+  - `all(sql, params)` — вибірка множини рядків;
+  - `get(sql, params)` — вибірка одного рядка;
+  - `run(sql, params)` — модифікуючі операції (INSERT/UPDATE/DELETE).
 
-Основні модулі:
+Файли DAL:
 
-- `backend/src/dal/favorites.dal.js`
-  - читання, вставка, видалення записів з таблиці `favorites`.
-- `backend/src/dal/history.dal.js`
-  - вставка нових записів історії;
-  - вибір останніх N записів;
-  - очищення історії.
-- `backend/src/dal/stats.dal.js`
-  - агрегуючі запити по таблиці `history`;
-  - підрахунок кількості записів;
-  - вибір топ-міст за кількістю звернень.
+- `favorites.dal.js`:
+  - працює з таблицею `favorites (id, name, lat, lon)`;
+  - надає методи `getAllFavorites`, `findFavoriteByName`, `insertFavorite`, `deleteFavoriteByName`, `clearFavorites`.
 
-Такий поділ дозволяє:
+- `history.dal.js`:
+  - працює з таблицею `history (id, date, city, temp, conditions)`;
+  - надає методи `getAllHistory`, `insertHistoryRecord`, `trimHistory`, `clearHistory`, `deleteHistoryOlderThan`.
 
-- ізолювати SQL у DAL;
-- перевикористовувати бізнес-логіку в сервісах;
-- спростити тестування та подальший рефакторинг.
+- `stats.dal.js`:
+  - будує агрегати на основі таблиць `history` та `favorites`;
+  - `getTopCities(limit)` — `SELECT city, COUNT(*) AS count FROM history GROUP BY city…`;
+  - `getTotals()` — повертає `{ totalHistory, totalFavorites }`;
+  - `getTodayHistoryCount(date)` — повертає кількість записів в `history` за конкретну дату.
+
+Важливо: **усі SQL-запити зосереджені в DAL**, тому:
+
+- сервіси не працюють зі «сирим» SQL;
+- спрощується тестування і рефакторинг;
+- легше замінити SQLite на іншу БД при потребі.
 
 ---
 
 ## 4. Архітектура frontend
 
-Фронтенд побудовано як **односторінковий застосунок** без складного фреймворку, але з логічним поділом коду:
+Фронтенд побудовано як односторінковий застосунок без важкого фреймворку.
 
-- `frontend/index.html` — HTML-розмітка інтерфейсу:
-  - форма пошуку міста/координат;
-  - блок відображення поточної погоди;
-  - списки “Історія” та “Улюблені міста”.
-- `frontend/style.css` — стилі оформлення.
-- `frontend/app.js` — головний файл з UI-логікою:
-  - обробка подій користувача;
-  - оновлення DOM після отримання даних;
-  - виклики сервісів `weatherService` та `storageApi`.
-- `frontend/services/weatherService.js` — окремий модуль для роботи з погодним API:
-  - формування URL до VisualCrossing;
-  - обробка відповіді та повернення нормалізованих даних.
-- `frontend/services/storageApi.js` — модуль для взаємодії з бекендом:
-  - робота з `/api/favorites`, `/api/history`, `/api/stats`;
-  - інкапсуляція всіх HTTP-запитів до сервера.
+### 4.1. Основні файли
 
-Frontend **не працює напряму** з базою даних і не знає про структуру таблиць — вся робота йде через HTTP-API бекенду.
+- `index.html` — структура сторінки (форма пошуку, список міст, блок погоди, блок улюблених, історія, аналітика).
+- `style.css` — стилізація, адаптивне верстання, стани кнопок.
+- `app.js` — центральний сценарій, який:
+  - зв’язує DOM з логікою;
+  - ініціалізує обробники подій;
+  - викликає `storageApi.js` і `weatherService.js`;
+  - рендерить:
+    - поточну погоду та прогноз;
+    - список улюблених міст;
+    - історію переглядів;
+    - блок статистики (топ міст, лічильники).
 
----
+- `services/weatherService.js`:
+  - будує URL до VisualCrossing;
+  - викликає погодний API, повертає JSON;
+  - перевіряє `response.ok` і кидає помилки при невдалому запиті.
 
-## 5. REST API
+- `services/storageApi.js`:
+  - інкапсулює виклики бекенд-API:
+    - `/api/favorites`;
+    - `/api/history`;
+    - `/api/stats/*`;
+  - повертає готовий JSON у зручному для UI форматі;
+  - обробляє помилки відповідей (HTTP-коди 4xx/5xx).
 
-### 5.1 Favorites API (`/api/favorites`)
+- `storage.js`:
+  - обгортка над `localStorage`:
+    - `getFavorites`, `addFavorite`, `removeFavorite`, `clearFavorites`;
+    - `getHistory`, `addHistory`, `clearHistory`, `resetAll`, `debugStorage`.
+  - може використовуватися як локальний кеш або fallback.
 
-- `GET /api/favorites`  
-  Повертає список усіх улюблених міст користувача.
+- `current.city.list.json`:
+  - великий список доступних міст з координатами;
+  - використовується для вибору міста на фронтенді.
 
-- `POST /api/favorites`  
-  Додає нове місто до списку улюблених.
+### 4.2. Потік даних на фронтенді
 
-  **Тіло запиту (JSON):**
+Типовий сценарій:
 
-  ```json
-  {
-    "name": "Kyiv",
-    "lat": 50.4501,
-    "lon": 30.5234
-  }
-  ```
-
-- `DELETE /api/favorites/:name`  
-  Видаляє одне улюблене місто за його назвою.
-
-- `DELETE /api/favorites`  
-  Очищує список усіх улюблених міст.
-
----
-
-### 5.2 History API (`/api/history`)
-
-- `GET /api/history?limit=10`  
-  Повертає останні N записів історії.
-
-- `POST /api/history`  
-  Додає новий запис історії перегляду погоди.
-
-  **Тіло запиту (JSON):**
-
-  ```json
-  {
-    "date": "2025-11-30",
-    "city": "Kyiv",
-    "temp": 3.5,
-    "conditions": "Light rain"
-  }
-  ```
-
-  Дата може бути згенерована на бекенді, якщо не передана явно.
-
-- `DELETE /api/history`  
-  Повне очищення історії.
-
-- `DELETE /api/history/cleanup?days=30`  
-  Видаляє записи старше ніж N днів.  
-  Це окрема бізнес-операція, яка використовує логіку сервісного шару та DAL.
+1. Користувач обирає місто зі списку.
+2. `app.js` отримує його координати.
+3. `weatherService.js` викликає VisualCrossing і повертає прогноз.
+4. `app.js`:
+   - оновлює блок поточної погоди та карти;
+   - додає запис в історію через `storageApi.addHistory()` → бекенд → SQLite;
+   - оновлює блок історії;
+   - при додаванні в улюблені — викликає `storageApi.addFavorite()` → бекенд → SQLite і оновлює список улюблених.
+5. Для аналітики:
+   - `storageApi.getTopCities()` → `/api/stats/top-cities`;
+   - `storageApi.getStatsOverview()` → `/api/stats/overview`;
+   - `storageApi.getStatsToday()` → `/api/stats/today`.
 
 ---
 
-### 5.3 Stats API (`/api/stats`)
+## 5. Тестування та якість коду
 
-- `GET /api/stats/top-cities?limit=5`  
-  Повертає топ міст за кількістю переглядів погоди.
+### 5.1. Frontend
 
-- `GET /api/stats/overview`  
-  Повертає загальні лічильники:
-  - кількість записів у `history`;
-  - кількість улюблених міст у `favorites`.
+- **Jest + jsdom** — unit-тести для логіки роботи з `localStorage`.
+- **Stryker** — мутаційне тестування для оцінки якості тестового покриття.
+- **ESLint + Prettier** — перевірка стилю та автоформатування коду.
+- Скрипти:
+  - `npm test` — запуск Jest;
+  - `npm run test:mut` — запуск Stryker;
+  - `npm run lint` / `npm run lint:fix`;
+  - `npm run format` / `npm run format:check`.
 
-- `GET /api/stats/today?date=YYYY-MM-DD`  
-  Повертає кількість запитів за вказану дату (або за поточний день, якщо параметр не передано).
+### 5.2. Backend
 
----
-
-### 5.4 Weather API (`/api/weather`)
-
-(За наявності окремого роутера або проксі)  
-Ендпоінт(и) для отримання поточної погоди через бекенд на основі координат:
-
-- `GET /api/weather?lat=..&lon=..` — отримання погоди із зовнішнього API VisualCrossing.
+- **Jest + supertest**:
+  - інтеґраційні тести REST API:
+    - сценарії для favorites/history/stats;
+    - перевірка статус-кодів;
+    - перевірка структури JSON-відповідей.
+- **ESLint + Prettier** — для стилю коду.
+- Скрипти:
+  - `npm test`;
+  - `npm run lint`, `npm run lint:fix`;
+  - `npm run format`, `npm run format:check`.
 
 ---
 
 ## 6. CI/CD
 
-Для автоматизації перевірок та збірки застосунку використовується **GitHub Actions**. Основні етапи пайплайна:
+Для автоматизації перевірок застосунок інтегровано з **GitHub Actions** (workflow у репозиторії):
 
-- Встановлення залежностей для frontend та backend.
-- Запуск лінтерів та форматера (ESLint, Prettier).
-- Запуск unit-тестів (Jest).
-- Запуск end-to-end тестів (Playwright).
-- Запуск мутаційних тестів (Stryker) для оцінки якості покриття тестами.
+- На кожен `push` / `pull request`:
+  - встановлюються залежності для `frontend` та `backend`;
+  - запускаються:
+    - ESLint;
+    - Prettier (format-check);
+    - unit-тести:
+      - Jest на фронтенді;
+      - Jest + supertest на бекенді;
+    - (опційно) мутаційні тести Stryker.
+- У разі помилки будь-якого етапу збірка вважається невдалою.
 
-Це забезпечує автоматичну перевірку якості коду при кожному пуші та pull request.
+Така схема забезпечує:
+
+- стабільну якість коду;
+- відсутність «битих» тестів у гілці `main`;
+- прозорий пайплайн для захисту лабораторної роботи.
